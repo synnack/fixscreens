@@ -45,7 +45,7 @@ while True:
             cur_time = datetime.datetime(1970,1,1).utcnow()
             delta = cur_time - prev_time
             if delta.seconds < 6:  # 2 seconds settle delay + 3 seconds to fix the screens + 1 second busy slack
-                print("Rate limiter hit, what is happening?!")
+                print("Rate limiter hit, probably internal feedback loop, because we change the layout.")
                 continue
             prev_time = cur_time
 
