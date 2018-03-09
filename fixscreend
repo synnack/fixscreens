@@ -33,7 +33,7 @@ while True:
         except xcb.ProtocolException, error:
             print "Protocol error %s received!" % error.__class__.__name__
             continue
-        except:
+        except Exception, error:
             print "Unexpected error received: %s" % error.message
             continue
 
