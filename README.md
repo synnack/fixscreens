@@ -9,3 +9,5 @@ Also disable xrandr plugin for gnome / mate settings daemon:
 3. Set active to false
 
 
+Also, the priorities should be adjusted to the configuration of your screens/laptop CRTCs.
+
