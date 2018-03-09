@@ -1,0 +1,137 @@
+#!/usr/bin/python3
+import os, time
+from subprocess import Popen, PIPE
+
+# Right to left priorities (important for configuration):
+priorities = [ b'LVDS-1', b'VGA-1', b'DP-1', b'HDMI-1', b'DP-2', b'DP-3' ]
+
+# Supported configurations:
+# 3 external displays @ 1080p60, disables LVDS-1, right to left in priorities above
+# 2 external displays @ max (4k), disables LVDS-1, right to left in priorities above
+# 1 external display @ max (4k), keeps LVDS-1 alive, external display ABOVE LVDS-1
+# Just LVDS-1, keeps LVDS-1 alive, disables the rest
+
+
+displays = {}
+
+# Execute 'xrandr'
+xrandr = Popen(['xrandr'], stdout=PIPE)
+
+# Find all displays and turn them off, store the corresponding modelines in displays
+found_display = None
+for line in xrandr.stdout.readlines():
+    display_to_disable = None
+    if found_display:
+        displays[found_display] = line.strip().split()[0]
+        found_display = None
+    elif b" connected" in line:
+        found_display = line.strip().split()[0]
+        display_to_disable = found_display
+    elif b" disconnected" in line:
+        display_to_disable = line.strip().split()[0]
+
+    # Found a display, now disable the thing
+    if display_to_disable:
+        for crtc in [ 1, 2, 0 ]:
+            # Maybe this is needed for CRTC reclaiming, disabled for now, because it is disgusting
+            #cmd = b"xrandr --output %s --crtc %d --mode 1600x900" % (display, crtc)
+            #print(cmd)
+            #os.system(cmd)
+
+            # Kill the output
+            cmd = b"xrandr --output %s --off" % display_to_disable
+            print(cmd)
+            os.system(cmd)
+
+# Wait for screens to settle again in the off position ;-)
+time.sleep(1)
+
+# Find the screen that advertises 2048x1152, which is really a 1440p screen.
+# It advertises 1440p @ 60, but my HDMI-port cannot do that. 1440p @ 40 or 1440p @ 30 would work
+for display, mode in displays.items():
+    if mode == b"2048x1152":
+        cmd = b'xrandr --newmode "2560x1440_30.00"  146.27  2560 2680 2944 3328  1440 1441 1444 1465  -HSync +Vsync'
+        print(cmd)
+        os.system(cmd)
+
+        cmd = b'xrandr --addmode %s "2560x1440_30.00"' % display
+        print(cmd)
+        os.system(cmd)
+        displays[display] = b"2560x1440_30.00"
+
+
+# So, the order of CRTC operations is important
+# CRTC 2 does not do 4k and has to be initialised before other CRTCs, otherwise it does not work
+# If CRTC 2 is active, only one other screen can do 4k, so CRTC 2 should not be used in dual 4k.
+# If CRTC 0 or 1 is assigned to VGA-1, forget initialising two other 1080p screens.
+# So 2 1 0 with VGA first on the right, then DP-2 to its left, then DP-3 to the left of DP-2
+
+crtc = 0
+increment_ctrc = -1
+
+# 3 external displays, disable internal, go down to 1920x1080 for the 3 externals
+if len(displays) == 4:
+    position = b'left-of'
+
+    # Disable internal
+    if b'LVDS-1' in displays:
+        del displays[b'LVDS-1']
+
+    # Hardcode 1080p, because 3x 4k is difficult, apparently
+    for display in displays:
+        if displays[display] != None:
+            displays[display] = b'1920x1080'
+    crtc = 2
+    increment_crtc = -1
+    print("We have 4 screens total, disabling internal, capping to 1080p")
+
+# 2 external displays, disable internal and keep mode at maximum
+elif len(displays) == 3:
+    position = b'left-of'
+
+    # Disable internal
+    if b'LVDS-1' in displays:
+        del displays[b'LVDS-1']
+
+    crtc = 1
+    increment_crtc = -1
+    print("We have 3 screens total, disabling internal")
+
+# 1 external display above the internal, keep both on
+elif len(displays) == 2:
+    position = b'above'
+    crtc = 1
+    increment_crtc = -1
+    print("We have 2 screens total, internal plus external above it")
+
+# 1 or >4: start initialising CRTCs and see where we end up
+else:
+    position = b'left-of'
+    crtc = 2
+    increment_crtc = -1
+    print("We have 1 or >4 screens total, yolo-mode")
+
+# Set the right modes in order of priority
+prev_display = None
+for display in priorities:
+    if not display in displays:
+        continue
+    if crtc < 0:
+        break
+
+    mode = displays[display]
+    if mode == None:
+        continue
+
+    if prev_display:
+        pos = b'--%s %s' % (position, prev_display)
+    else:
+        pos = b''
+
+
+    cmd = b"xrandr --output %s --crtc %d --mode %s %s" % (display, crtc, mode, pos)
+    print(cmd)
+    os.system(cmd)
+
+    prev_display = display
+    crtc += increment_crtc

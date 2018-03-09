@@ -1,0 +1,55 @@
+#!/usr/bin/python
+import xcb
+import os
+from xcb.xproto import *
+from xcb.randr import *
+
+import datetime, time
+
+# Connect to X
+conn = xcb.connect()
+
+# Get the root window
+setup = conn.get_setup()
+root = setup.roots[0]
+
+# Connect to the XrandR extension
+# key is defined in xcb.randr
+randr = conn(key)
+
+# Subscribe to ScreenChange events
+randr.SelectInput(root.root, NotifyMask.ScreenChange)
+
+# flush() is *always* necessary before conn.wait_for_event()
+conn.flush()
+
+
+# Initialise a very low datetime for the first go
+prev_time = datetime.datetime(1970,1,1)
+
+while True:
+        try:
+            event = conn.wait_for_event()
+        except xcb.ProtocolException, error:
+            print "Protocol error %s received!" % error.__class__.__name__
+            continue
+        except:
+            print "Unexpected error received: %s" % error.message
+            continue
+
+        # Always flush right after conn.wait_for_event() for the next one
+        conn.flush()
+
+        if isinstance(event, ScreenChangeNotifyEvent):
+            # Settle down champ.. we really should not be changing the outputs this often
+            cur_time = datetime.datetime(1970,1,1).utcnow()
+            delta = cur_time - prev_time
+            if delta.seconds < 6:  # 2 seconds settle delay + 3 seconds to fix the screens + 1 second busy slack
+                print("Rate limiter hit, what is happening?!")
+                continue
+            prev_time = cur_time
+
+            # Wait 2 seconds for the changes to settle
+            if isinstance(event, ScreenChangeNotifyEvent):
+                time.sleep(2)
+                os.system("fixscreens")
