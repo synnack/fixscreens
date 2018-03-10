@@ -33,10 +33,10 @@ for line in xrandr.stdout.readlines():
     # Found a display, now disable the thing
     if display_to_disable:
         for crtc in [ 1, 2, 0 ]:
-            # Maybe this is needed for CRTC reclaiming, disabled for now, because it is disgusting
-            #cmd = b"xrandr --output %s --crtc %d --mode 1600x900" % (display, crtc)
-            #print(cmd)
-            #os.system(cmd)
+            # This is needed for CRTC reclaiming, it is disgusting :-(
+            cmd = b"xrandr --output %s --crtc %d --mode 1600x900" % (display_to_disable, crtc)
+            print(cmd)
+            os.system(cmd)
 
             # Kill the output
             cmd = b"xrandr --output %s --off" % display_to_disable
